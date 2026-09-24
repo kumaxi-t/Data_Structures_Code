@@ -152,6 +152,78 @@ bool IsValidAVL(AVLNode *root, long long &pre_val) {
     return (IsValidAVL(root->rchild, pre_val));
 }
 
+
+
+// ----------------------------------------------------------------------------
+// AVL 树结点删除与自平衡
+// 目标：
+// 1. 递归定位 key；若不存在直接退出
+// 2. 找到结点后按三种情形摘除（无孩子/单孩子/双孩子找后继覆盖再递归删后继）
+// 3. 递归回溯时：防空指针判断 -> 刷新高度 -> 检查 balance -> 四种失衡调平
+// 注意：失衡判定请依据子结点的平衡因子（>= 0 或 <= 0），不可沿用插入时的 key 比较！
+// ----------------------------------------------------------------------------
+void AVL_Delete(AVLNode* &root, int key) {
+    // 请在此编写你的代码：
+    if(!root) return ;
+    if(root->key > key) {
+        AVL_Delete(root->lchild, key);
+    }else if(root->key < key) {
+        AVL_Delete(root->rchild, key);
+    }else {
+        // 此时root即为要删除的结点
+        if(!root->lchild) {
+            // 没左孩子让右孩子上位
+            AVLNode* temp = root->rchild;
+            delete(root);
+            root = temp;
+        }else if(!root->rchild) {
+            // 没右孩子让左孩子上位
+            AVLNode* temp = root->lchild;
+            delete(root);
+            root = temp;
+        }else {
+            // 左右都有孩子
+            AVLNode* successor = root->rchild;
+            while(successor->lchild) {
+                successor = successor->lchild;
+            }
+            root->key = successor->key;
+            AVL_Delete(root->rchild, successor->key);
+        }
+    }
+
+    // 删了要检查是否平衡
+
+    // 把根节点删了直接返回
+    if(!root) return ;
+
+    UpdateHeight(root);
+
+    int balance = GetBalanceFactor(root);
+
+    if(balance > 1) {
+        if(GetBalanceFactor(root->lchild) >= 0) {
+            // LL
+            RightRotate(root);
+        }else {
+            // LR
+            LeftRotate(root->lchild);
+            RightRotate(root);
+        }
+
+    }else if (balance < -1) {
+        if(GetBalanceFactor(root->rchild) <= 0) {
+            // RR
+            LeftRotate(root);
+        }else {
+            // RL
+            RightRotate(root->rchild);
+            LeftRotate(root);
+        }
+    }
+
+
+}
 // ============================================================================
 //                          【自动化校验驱动区（无需修改）】
 // ============================================================================
@@ -168,39 +240,80 @@ int main() {
 
     AVLNode *root = nullptr;
 
-    // 测试用例 1：最极端的升序序列插入（若不平衡将退化为单链表，高度为 7）
-    // 插入序列：10, 20, 30, 40, 50, 25, 5
+    // 测试用例 1：最极端的升序序列插入
     vector<int> keys = {10, 20, 30, 40, 50, 25, 5};
     for (int k : keys) {
         AVL_Insert(root, k);
     }
 
-    // 1. 验证整树高度控制（7个结点的完全平衡树，高度应在 3 到 4 之间）
+    // 1. 验证插入后树高控制
     int tree_height = GetHeight(root);
     bool height_ok = (tree_height <= 4);
     cout << "测试 1 [AVL 插入后树高控制]: " << (height_ok ? "PASS" : "FAIL") 
          << " (实际树高: " << tree_height << ")\n";
 
-    // 2. 验证是否为合法 AVL 树（BST 单调性 + 任意结点 |BF| <= 1）
+    // 2. 验证是否为合法 AVL 树
     long long pre = -2147483648LL - 1;
     bool avl_valid = IsValidAVL(root, pre);
     cout << "测试 2 [全局 AVL 平衡与有序校验]: " << (avl_valid ? "PASS" : "FAIL") << "\n";
 
-    // 3. 验证中序遍历序列完整性
+    // 3. 验证中序遍历完整性
     vector<int> sorted_keys;
     InOrder(root, sorted_keys);
     vector<int> expected = {5, 10, 20, 25, 30, 40, 50};
     bool order_ok = (sorted_keys == expected);
     cout << "测试 3 [中序遍历结果数据完整性]: " << (order_ok ? "PASS" : "FAIL") << "\n";
 
-    // 4. 验证根结点数值（通过模拟旋转推演，根应处于合理中间值）
+    // 4. 验证核心新根定位
     bool root_ok = (root != nullptr && (root->key == 30 || root->key == 20 || root->key == 40));
     cout << "测试 4 [核心新根定位校验]: " << (root_ok ? "PASS" : "FAIL") 
-         << " (当前根: " << (root ? root->key : -1) << ")\n";
+         << " (当前根: " << (root ? root->key : -1) << ")\n\n";
 
-    // 5. 树安全释放
+    // ========================================================================
+    //                        【新增：删除操作自动化测试】
+    // ========================================================================
+    cout << "--- 启动 AVL 树【删除操作与自平衡】严苛测试 ---\n";
+
+    // 5. 测试场景 A：删除叶子结点 (5)
+    AVL_Delete(root, 5);
+    pre = -2147483648LL - 1;
+    bool del_leaf_ok = IsValidAVL(root, pre);
+    cout << "测试 5 [删除叶子结点 5]: " << (del_leaf_ok ? "PASS" : "FAIL") 
+         << " (当前树高: " << GetHeight(root) << ")\n";
+
+    // 6. 测试场景 B：删除中间结点 (40)
+    AVL_Delete(root, 40);
+    pre = -2147483648LL - 1;
+    bool del_mid_ok = IsValidAVL(root, pre);
+    cout << "测试 6 [删除中间分支结点 40]: " << (del_mid_ok ? "PASS" : "FAIL") 
+         << " (当前树高: " << GetHeight(root) << ")\n";
+
+    // 7. 测试场景 C：删除双孩子根结点 (测试后继结点顶替机制)
+    int old_root_key = root ? root->key : -1;
+    AVL_Delete(root, old_root_key);
+    pre = -2147483648LL - 1;
+    bool del_root_ok = IsValidAVL(root, pre);
+    cout << "测试 7 [删除双全根结点 " << old_root_key << "]: " << (del_root_ok ? "PASS" : "FAIL") 
+         << " (新根: " << (root ? root->key : -1) << ")\n";
+
+    // 8. 测试场景 D：删除不存在的键值 (边界防御)
+    AVL_Delete(root, 999);
+    pre = -2147483648LL - 1;
+    bool del_none_ok = IsValidAVL(root, pre);
+    cout << "测试 8 [删除不存在结点 999 容错]: " << (del_none_ok ? "PASS" : "FAIL") << "\n";
+
+    // 9. 测试场景 E：连续清空整树触发多级调平与归零校验
+    vector<int> remaining_keys;
+    InOrder(root, remaining_keys);
+    for (int rk : remaining_keys) {
+        AVL_Delete(root, rk);
+    }
+    bool empty_ok = (root == nullptr && GetHeight(root) == 0);
+    cout << "测试 9 [连续删除至全树清空校验]: " << (empty_ok ? "PASS" : "FAIL") << "\n\n";
+
+    // 10. 树安全释放防御
     DestroyAVL(root);
-    cout << "测试 5 [AVL 树安全销毁与置空]: " << (root == nullptr ? "PASS" : "FAIL") << "\n";
+    cout << "测试 10 [AVL 树安全销毁与置空]: " << (root == nullptr ? "PASS" : "FAIL") << "\n";
 
     cout << "\n============= 自测流程全部结束 =============\n";
     return 0;
