@@ -62,6 +62,7 @@ private:
     y->left = x;
 
   }
+  
   // 右旋
   void RightRotate(RBNode* y) {
     RBNode* x = y->left;
