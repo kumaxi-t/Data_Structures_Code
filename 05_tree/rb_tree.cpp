@@ -206,7 +206,7 @@ private:
     }
   }
 
-  private:
+private:
 
   // 销毁
   void DestroyHelper(RBNode* root) {
